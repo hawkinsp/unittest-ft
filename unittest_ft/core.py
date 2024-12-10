@@ -131,15 +131,13 @@ def get_individual_tests(suite: TestSuite) -> Generator[TestCase, None, None]:
             yield test
 
 
-def run_single_test(test_id: str) -> tuple[str, FTTestResult]:
-    LOG.debug("Loading test %s", test_id)
-    loader = TestLoader()
-    suite = loader.loadTestsFromName(test_id)
-    LOG.debug("Running test %s", test_id)
+def run_single_test(test: TestCase) -> tuple[str, FTTestResult]:
+    LOG.debug("Loading test %s", test.id())
+    LOG.debug("Running test %s", test.id())
     result = FTTestResult(descriptions=True, verbosity=2)
-    suite.run(result)
-    LOG.debug("Finished test %s", test_id)
-    return (test_id, result)
+    test.run(result)
+    LOG.debug("Finished test %s", test.id())
+    return (test.id(), result)
 
 
 def format_ns(duration: int) -> str:
@@ -206,17 +204,18 @@ def run(
         suite = loader.discover(".")
     LOG.debug("loaded %d test cases from %s", suite.countTestCases(), module or ".")
 
-    test_ids = [test.id() for test in get_individual_tests(suite)]
+    tests = [test for test in get_individual_tests(suite)]
     if stress_test:
-        test_ids = test_ids * 10
+        tests = tests * 10
     if randomize:
-        random.shuffle(test_ids)
+        random.shuffle(tests)
     else:
-        test_ids.sort()
+        tests.sort(key=lambda test: test.id())
 
-    LOG.debug("ready to run %d tests:\n  %s", len(test_ids), "\n  ".join(test_ids))
+    LOG.debug("ready to run %d tests:\n  %s", len(tests),
+              "\n  ".join([test.id() for test in tests]))
     pool = ThreadPoolExecutor(max_workers=threads)
-    futures = {pool.submit(run_single_test, test_id): test_id for test_id in test_ids}
+    futures = {pool.submit(run_single_test, test): test for test in tests}
     pending = set(futures)
 
     output = Output(futures, verbosity=verbosity)
